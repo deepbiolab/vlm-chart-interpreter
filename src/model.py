@@ -2,6 +2,7 @@
 Contrastive Language Image Pretraining
 
 References:
+0. Transformer: https://arxiv.org/pdf/1706.03762
 1. ViT: https://arxiv.org/pdf/2010.11929
 2. CLIP: https://arxiv.org/pdf/2103.00020
 3. SigLIP: https://arxiv.org/pdf/2303.15343
@@ -10,6 +11,7 @@ References:
 from dataclasses import dataclass
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 @dataclass
@@ -34,7 +36,11 @@ class VisionConfig:
 
 
 class VisionEmbeddings(nn.Module):
-    """ViT: https://arxiv.org/pdf/2010.11929"""
+    """Transform image to patches.
+
+    Reference:
+        ViT: https://arxiv.org/pdf/2010.11929
+    """
 
     def __init__(self, config: VisionConfig):
         super().__init__()
@@ -95,8 +101,40 @@ class VisionEmbeddings(nn.Module):
         return embeddings
 
 
+class MHAttention(nn.Module):
+    """Multi-Head Attention Layer.
+    
+    Reference:
+        Transformer: https://arxiv.org/pdf/1706.03762
+    """
+
+
+class MLP(nn.Module):
+    """Feed Forward Layer of Transformer Encoder.
+
+    Reference:
+        Transformer: https://arxiv.org/pdf/1706.03762
+    """
+
+    def __init__(self, config: VisionConfig):
+        super().__init__()
+        self.config = config
+        self.fc1 = nn.Linear(config.hidden_size, config.feedforward_size)
+        self.fc2 = nn.Linear(config.feedforward_size, config.hidden_size)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        """Position-wise fully connected feed-forward network"""
+        # [batch_size, num_patches, embed_size]
+        hidden_states = self.fc1(hidden_states)
+        # [batch_size, num_patches, embed_size * 4]
+        hidden_states = F.gelu(hidden_states, approximate="tanh")
+        # [batch_size, num_patches, embed_size]
+        hidden_states = self.fc2(hidden_states)
+        return hidden_states
+
+
 class EncoderLayer(nn.Module):
-    """Encoder layer of transformer
+    """Encoder layer of transformer.
 
     Reference:
         Vit: https://arxiv.org/pdf/2010.11929
@@ -137,7 +175,11 @@ class EncoderLayer(nn.Module):
 
 
 class VisionTransformer(nn.Module):
-    """ViT: https://arxiv.org/pdf/2010.11929"""
+    """Vision Transformer used for extraction of feature representations.
+
+    Reference:
+        ViT: https://arxiv.org/pdf/2010.11929
+    """
 
     def __init__(self, config: VisionConfig):
         super().__init__()
@@ -155,7 +197,11 @@ class VisionTransformer(nn.Module):
 
 
 class VisionModel(nn.Module):
-    """Model used to extract token embedding for image"""
+    """Model used to extract image token representations.
+
+    Reference:
+        CLIP: https://arxiv.org/pdf/2103.00020
+    """
 
     def __init__(self, config: VisionConfig):
         super().__init__()
@@ -163,7 +209,7 @@ class VisionModel(nn.Module):
         self.vit = VisionTransformer(config)
 
     def forward(self, imgs: torch.Tensor) -> torch.Tensor:
-        """Transform images into number of patches"""
+        """Transform images into number of patches (token)"""
         # [batch_size, channels, height, width] ==>
         # [batch_size, num_patches, embed_size]
         return self.vit(imgs)
